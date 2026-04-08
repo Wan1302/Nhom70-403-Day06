@@ -2,6 +2,7 @@
 
 **Nhóm:** ___
 **Track:** ☐ VinFast · ☐ Vinmec · ☐ VinUni-VinSchool · ☐ XanhSM · ☑ Open
+<br>
 **Problem statement (1 câu):** Cư dân sống ở Vinhomes thường mất thời gian tìm thông tin nội quy, tiện ích, phí dịch vụ và gửi phản ánh qua nhiều kênh khác nhau; chatbot AI giúp trả lời nhanh các câu hỏi thường gặp, hướng dẫn đúng quy trình và tạo ticket cho ban quản lý khi cần.
 
 ---
@@ -14,6 +15,7 @@
 | **Trả lời** | Cư dân Vinhomes cần hỏi nhanh về nội quy, phí quản lý, đặt tiện ích, gửi phản ánh sửa chữa hoặc an ninh. Hiện tại user phải gọi hotline, nhắn ban quản lý, hỏi group cư dân hoặc tự tìm trong app. AI gom thông tin thành một điểm hỏi đáp, giúp user nhận câu trả lời hoặc tạo yêu cầu hỗ trợ trong vài phút. | Nếu AI sai, user có thể bấm "Không đúng", chọn lý do sai, nhập thông tin sửa lại hoặc yêu cầu gặp nhân viên ban quản lý. Với các câu trả lời liên quan đến phí, an ninh, sự cố khẩn cấp, bot phải dẫn nguồn từ tài liệu chính thức hoặc chuyển sang người thật. | Ước tính 2.000-5.000 VND/100 lượt chat đơn giản, latency mục tiêu <3s cho FAQ và <8s cho tạo ticket. Risk chính: hallucination về phí/nội quy, hiểu sai mức độ khẩn cấp, lộ thông tin cá nhân cư dân, dữ liệu cư dân từng tòa khác nhau. |
 
 **Automation hay augmentation?** ☐ Automation · ☑ Augmentation
+<br>
 Justify: Augmentation — chatbot hỗ trợ trả lời, tóm tắt và tạo ticket nháp; user vẫn xác nhận trước khi gửi yêu cầu, còn các case nhạy cảm hoặc khẩn cấp được chuyển cho ban quản lý/con người.
 
 **Learning signal:**
@@ -21,6 +23,7 @@ Justify: Augmentation — chatbot hỗ trợ trả lời, tóm tắt và tạo t
 1. User correction đi vào đâu? Correction được lưu vào feedback log theo intent, tòa/cụm cư dân, câu hỏi gốc, câu trả lời bot, lý do user báo sai và câu trả lời đúng do nhân viên xác nhận.
 2. Product thu signal gì để biết tốt lên hay tệ đi? Tỷ lệ câu trả lời được user chấp nhận, tỷ lệ chuyển sang nhân viên, thời gian xử lý ticket, tỷ lệ ticket bị phân loại sai, số lần user hỏi lại cùng một vấn đề, CSAT sau mỗi cuộc chat.
 3. Data thuộc loại nào? ☑ User-specific · ☑ Domain-specific · ☑ Real-time · ☑ Human-judgment · ☐ Khác: ___
+<br>
    Có marginal value không? Có. Model nền có thể biết tiếng Việt và kiến thức chung, nhưng không biết chính xác nội quy từng khu, trạng thái thang máy/bãi xe, phí dịch vụ, lịch bảo trì, quy trình xử lý của từng ban quản lý và feedback thực tế của cư dân.
 
 ---
@@ -56,6 +59,7 @@ Mỗi feature chính = 1 bảng. AI trả lời xong → chuyện gì xảy ra?
 ## 3. Eval metrics + threshold
 
 **Optimize precision hay recall?** ☑ Precision · ☐ Recall
+<br>
 Tại sao? Chatbot liên quan đến nội quy, phí dịch vụ, an ninh và sự cố cư dân nên trả lời sai tự tin cao sẽ nguy hiểm hơn là không trả lời. Nếu không chắc, bot nên hỏi lại hoặc chuyển sang nhân viên thay vì bịa thông tin.
 Nếu sai ngược lại thì chuyện gì xảy ra? Nếu quá ưu tiên precision nhưng recall thấp, bot sẽ chuyển sang nhân viên quá nhiều, làm giảm giá trị tự động hóa và user cảm thấy chatbot không giúp được gì. Vì vậy cần precision cao cho câu trả lời chắc chắn, nhưng vẫn có flow hỏi lại để giữ trải nghiệm.
 
