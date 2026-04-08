@@ -110,3 +110,8 @@ Chất lượng nên tối ưu precision hơn recall vì trả lời sai về ph
 Risk chính gồm hallucination về quy định, dữ liệu lỗi thời theo từng khu, phân loại sai mức độ khẩn cấp và rò rỉ thông tin cá nhân cư dân. Mitigation gồm RAG từ tài liệu chính thức, versioning/timestamp cho KB, rule escalate cho sự cố khẩn cấp, màn hình xác nhận trước khi tạo ticket, feedback "Không đúng", correction log, masking PII và giới hạn quyền truy cập dữ liệu.
 
 Data flywheel đến từ các lượt user sửa câu trả lời, ticket bị chuyển bộ phận, câu hỏi không trả lời được, CSAT thấp và phản hồi từ nhân viên ban quản lý. Những signal này được dùng để cập nhật KB, cải thiện intent classifier và bổ sung rule cho từng khu/tòa. Marginal value cao vì dữ liệu địa phương của Vinhomes không phải kiến thức phổ thông mà model nền đã biết sẵn.
+
+## Phân công
+- 2A202600081- Hồ Trọng Duy Quang: Canvas + failure modes
+- 2A202600080- Hồ Trần Đình Nguyên: User stories 4 paths, Prototype research 
+- 2A202600057- Hồ Đắc Toàn: Eval metrics + ROI, prompt test
