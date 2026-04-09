@@ -1,0 +1,1 @@
+"""Vinhomes resident assistant."""
