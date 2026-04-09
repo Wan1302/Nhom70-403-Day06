@@ -115,3 +115,234 @@ Data flywheel đến từ các lượt user sửa câu trả lời, ticket bị 
 - 2A202600081- Hồ Trọng Duy Quang: Canvas + failure modes
 - 2A202600080- Hồ Trần Đình Nguyên: User stories 4 paths, Prototype research 
 - 2A202600057- Hồ Đắc Toàn: Eval metrics + ROI, prompt test
+
+---
+
+## 7. LangGraph flow chi tiết
+
+### 7.1 Mục tiêu
+
+Thiết kế một agent loop dùng LangGraph với model não là `gpt-4o`, đóng vai trò router và orchestrator cho 3 nhóm nhu cầu chính:
+
+1. Tra cứu FAQ/nội quy/phí dịch vụ từ knowledge base nội bộ.
+2. Thu thập thông tin từng bước để tạo ticket sự cố.
+3. Lên kế hoạch đi chơi tại Vinhomes Ocean Park Gia Lâm bằng cách hỏi thêm thông tin và gọi các tool hỗ trợ.
+
+### 7.2 Nguyên tắc điều phối
+
+- `gpt-4o` không trả lời dựa trên trí nhớ khi câu hỏi thuộc miền dữ liệu nội bộ; phải ưu tiên gọi tool trước.
+- Với các câu hỏi về phí/quy định/thủ tục thuê, câu trả lời phải grounded vào dữ liệu FAQ đã lọc.
+- Với ticket, chỉ tạo ticket sau khi đã đủ trường bắt buộc và user xác nhận lại bản nháp.
+- Với planner, agent cần hỏi bổ sung cho đến khi đủ ràng buộc tối thiểu rồi mới lập lịch trình.
+- Nếu thiếu thông tin, graph sẽ quay về node hỏi làm rõ thay vì đoán.
+
+### 7.3 Mermaid sketch chi tiết
+
+```mermaid
+flowchart TD
+    A[User Message] --> B[Input Preprocess]
+    B --> C[Router LLM - GPT-4o]
+
+    C -->|faq_policy| D[FAQ Intake]
+    C -->|ticket_issue| E[Ticket Intake]
+    C -->|trip_plan| F[Trip Intake]
+    C -->|unknown| G[Clarify Intent]
+    G --> C
+
+    D --> D1[Check slots: topic, location, asset type]
+    D1 --> D2{Need clarification?}
+    D2 -->|Yes| D3[Ask follow-up]
+    D3 --> D1
+    D2 -->|No| D4[Tool: search_faq_kb]
+    D4 --> D5{Has grounded answer?}
+    D5 -->|No| D6[Fallback: ask user or handoff]
+    D5 -->|Yes| D7[Compose grounded answer with source]
+    D7 --> Z[Respond to user]
+
+    E --> E1[Extract ticket fields from user message]
+    E1 --> E2[Tool: get_ticket_schema]
+    E2 --> E3[Compute missing fields]
+    E3 --> E4{All required fields present?}
+    E4 -->|No| E5[Ask next missing field]
+    E5 --> E6[Tool: validate_ticket_input]
+    E6 --> E1
+    E4 -->|Yes| E7[Tool: summarize_ticket_draft]
+    E7 --> E8[Ask user confirm or edit]
+    E8 --> E9{Confirmed?}
+    E9 -->|Edit| E10[Apply user correction]
+    E10 --> E6
+    E9 -->|Confirmed| E11[Tool: create_ticket]
+    E11 --> E12[Return ticket id and summary]
+    E12 --> Z
+
+    F --> F1[Extract trip constraints]
+    F1 --> F2{Enough constraints?}
+    F2 -->|No| F3[Ask step-by-step question]
+    F3 --> F1
+    F2 -->|Yes| F4[Tool: get_weather]
+    F4 --> F5[Tool: get_vop_places]
+    F5 --> F6[Tool: get_bus_routes]
+    F6 --> F7[Tool: estimate_budget]
+    F7 --> F8[Tool: build_itinerary]
+    F8 --> F9[Show plan draft]
+    F9 --> F10{Need revise?}
+    F10 -->|Yes| F11[Update constraints]
+    F11 --> F4
+    F10 -->|No| F12[Return final plan]
+    F12 --> Z
+```
+
+### 7.4 Giải thích 3 subgraph
+
+**FAQ subgraph**
+
+- Dùng cho các câu hỏi như phí gửi xe, phí dịch vụ, quy định nuôi thú cưng, giờ hoạt động tiện ích, thủ tục thuê.
+- Graph cố gắng bóc tách một số slot như `chủ đề`, `loại tài sản`, `khu vực`, `loại cư dân`.
+- Khi slot chưa rõ, node follow-up sẽ hỏi từng câu ngắn như "Bạn hỏi phí xe máy hay ô tô?" hoặc "Bạn đang hỏi Ocean Park hay thủ tục thuê?".
+- Sau khi đủ ngữ cảnh, tool `search_faq_kb` truy xuất từ file FAQ đã chọn và trả về đoạn liên quan nhất.
+- LLM chỉ có nhiệm vụ diễn đạt lại câu trả lời ngắn gọn, có nguồn và có timestamp khi có.
+
+**Ticket subgraph**
+
+- Dùng cho các trường hợp như kẹt thang máy, rò nước, mất điện, an ninh, vệ sinh, xe đỗ sai chỗ.
+- Graph hoạt động như một form hội thoại: tự động trích xuất những trường đã có trong lời user và hỏi nốt trường còn thiếu.
+- Các trường tối thiểu nên có: `loại sự cố`, `mức độ khẩn cấp`, `địa điểm`, `mô tả`, `thời điểm`, `thông tin liên hệ`.
+- Tool `validate_ticket_input` giúp kiểm tra logic như vị trí có hợp lệ không, khẩn cấp có bị thiếu không, mô tả có quá ngắn không.
+- Khi đủ dữ liệu, graph sinh một bản nháp dễ đọc rồi hỏi lại user: "Mình hiểu như sau... đã đúng chưa?".
+- Chỉ khi user xác nhận, `create_ticket` mới được gọi.
+
+**Trip planner subgraph**
+
+- Dùng cho các yêu cầu như đi chơi cuối tuần ở Vinhomes Ocean Park Gia Lâm, đi theo gia đình, cần xe bus, cần tối ưu chi phí.
+- Graph nên hỏi tuần tự các constraint tối thiểu: `ngày đi`, `số người`, `có trẻ em không`, `ngân sách`, `đi từ đâu`, `phương tiện mong muốn`, `sở thích`.
+- Sau đó lần lượt gọi các tool:
+- `get_weather`: lấy thời tiết theo ngày.
+- `get_vop_places`: lấy danh sách điểm đến trong/near Ocean Park như biển hồ, trường, mall, khu ăn uống, khu vui chơi.
+- `get_bus_routes`: kiểm tra tuyến bus/VinBus hoặc phương án di chuyển.
+- `estimate_budget`: tính ngân sách dự kiến.
+- `build_itinerary`: ghép lịch trình cuối cùng theo buổi.
+- Nếu user muốn sửa như "bớt chi phí", "thêm chỗ ăn", "đi muộn hơn", graph sẽ cập nhật constraint và chạy lại planner loop.
+
+### 7.5 Mapping intent sang route
+
+| Intent route | Dấu hiệu câu hỏi | Hành động chính |
+|---|---|---|
+| `faq_policy` | phí, quy định, nội quy, thủ tục, có được phép không, giờ mở cửa | Tra cứu KB và trả lời có nguồn |
+| `ticket_issue` | hỏng, lỗi, sự cố, phản ánh, báo giúp, tạo ticket, sửa chữa | Thu thập dữ liệu từng bước và tạo ticket |
+| `trip_plan` | đi chơi, lịch trình, ăn gì, chơi gì, bus, thời tiết, cuối tuần | Hỏi constraint và xây itinerary |
+| `unknown` | câu hỏi mơ hồ hoặc trộn nhiều ý | Hỏi lại để xác định intent chính |
+
+---
+
+## 8. State và node cho LangGraph
+
+### 8.1 State tổng
+
+State chung của graph có thể khai báo dưới dạng typed state hoặc Pydantic model với các trường sau:
+
+| State key | Kiểu dữ liệu | Vai trò |
+|---|---|---|
+| `messages` | list | Lưu lịch sử hội thoại cho LLM và tool loop |
+| `intent` | string | Kết quả router: `faq_policy`, `ticket_issue`, `trip_plan`, `unknown` |
+| `confidence` | float | Mức tự tin của router hoặc classifier |
+| `user_profile` | object | Thông tin đã biết về user như khu, vai trò, contact |
+| `faq_query` | object | Query đã chuẩn hóa cho FAQ search |
+| `retrieved_docs` | list | Kết quả truy xuất từ KB |
+| `faq_answer_draft` | string | Bản nháp trả lời FAQ trước khi gửi |
+| `ticket_draft` | object | Bản nháp ticket đang được điền dần |
+| `missing_fields` | list | Danh sách trường ticket hoặc trip còn thiếu |
+| `ticket_confirmed` | boolean | User đã xác nhận ticket hay chưa |
+| `ticket_result` | object | Kết quả trả về sau khi tạo ticket |
+| `trip_constraints` | object | Ràng buộc cho planner |
+| `weather_info` | object | Kết quả từ tool thời tiết |
+| `places_info` | list | Danh sách địa điểm phù hợp |
+| `transport_info` | list | Gợi ý bus/tuyến di chuyển |
+| `budget_info` | object | Ước lượng chi phí |
+| `itinerary_draft` | object/string | Lịch trình tạm thời |
+| `final_response` | string | Câu trả lời cuối cùng gửi cho user |
+| `next_action` | string | Tín hiệu điều phối cho graph |
+| `error` | string | Thông báo lỗi hoặc fallback |
+
+### 8.2 Node danh nghĩa
+
+| Node | Input chính | Output chính | Vai trò |
+|---|---|---|---|
+| `preprocess_input` | `messages` | normalized message | Chuẩn hóa input, bóc entity đơn giản |
+| `route_intent` | `messages` | `intent`, `confidence` | Dùng `gpt-4o` để route |
+| `clarify_intent` | `messages` | follow-up question | Hỏi lại khi intent chưa rõ |
+| `faq_extract_slots` | `messages` | `faq_query`, `missing_fields` | Tách slot cho FAQ |
+| `faq_clarify` | `missing_fields` | question | Hỏi thông tin còn thiếu cho FAQ |
+| `faq_search_kb` | `faq_query` | `retrieved_docs` | Gọi tool tra KB nội bộ |
+| `faq_compose_answer` | `retrieved_docs` | `faq_answer_draft` | Tạo câu trả lời grounded |
+| `ticket_extract_fields` | `messages` | `ticket_draft`, `missing_fields` | Lấy các field đã có từ user |
+| `ticket_get_schema` | none | schema | Lấy schema ticket cần thiết |
+| `ticket_validate` | `ticket_draft` | `missing_fields`, validation result | Kiểm tra còn thiếu gì |
+| `ticket_ask_next` | `missing_fields` | question | Hỏi lần lượt từng field |
+| `ticket_summarize` | `ticket_draft` | summary text | Tạo bản nháp để xác nhận |
+| `ticket_apply_correction` | user edit | updated `ticket_draft` | Sửa theo phản hồi của user |
+| `ticket_create` | `ticket_draft` | `ticket_result` | Gọi tool tạo ticket thật |
+| `trip_extract_constraints` | `messages` | `trip_constraints`, `missing_fields` | Trích xuất ràng buộc chuyến đi |
+| `trip_ask_next` | `missing_fields` | question | Hỏi thêm từng ràng buộc |
+| `trip_get_weather` | date/location | `weather_info` | Tool thời tiết |
+| `trip_get_places` | interests/area | `places_info` | Tool lấy địa điểm ở Ocean Park |
+| `trip_get_transport` | origin/date | `transport_info` | Tool bus/VinBus/route |
+| `trip_estimate_budget` | pax/places/transport | `budget_info` | Ước lượng ngân sách |
+| `trip_build_itinerary` | all planner data | `itinerary_draft` | Tạo lịch trình nháp |
+| `trip_refine` | user feedback | updated constraints | Chỉnh lại kế hoạch |
+| `finalize_response` | branch outputs | `final_response` | Đóng gói câu trả lời cuối |
+
+### 8.3 Entry points và exit points
+
+**Entry**
+
+- `START -> preprocess_input -> route_intent`
+
+**Exit**
+
+- FAQ: `faq_compose_answer -> finalize_response -> END`
+- Ticket: `ticket_create -> finalize_response -> END`
+- Trip: `trip_build_itinerary -> finalize_response -> END`
+- Clarification path: nếu user chưa trả lời đủ, graph dừng ở câu hỏi follow-up và chờ turn tiếp theo.
+
+### 8.4 Điều kiện chuyển node
+
+| Từ node | Điều kiện | Sang node |
+|---|---|---|
+| `route_intent` | intent = `faq_policy` | `faq_extract_slots` |
+| `route_intent` | intent = `ticket_issue` | `ticket_extract_fields` |
+| `route_intent` | intent = `trip_plan` | `trip_extract_constraints` |
+| `route_intent` | intent = `unknown` | `clarify_intent` |
+| `faq_extract_slots` | còn thiếu slot | `faq_clarify` |
+| `faq_extract_slots` | đủ slot hoặc query đủ mạnh | `faq_search_kb` |
+| `ticket_validate` | thiếu field | `ticket_ask_next` |
+| `ticket_validate` | đủ field | `ticket_summarize` |
+| `ticket_summarize` | user chưa xác nhận | `ticket_apply_correction` |
+| `ticket_summarize` | user xác nhận | `ticket_create` |
+| `trip_extract_constraints` | thiếu constraint | `trip_ask_next` |
+| `trip_extract_constraints` | đủ constraint | `trip_get_weather` |
+| `trip_build_itinerary` | user muốn sửa | `trip_refine` |
+| `trip_refine` | có constraint mới | `trip_get_weather` |
+
+### 8.5 Bộ tool đề xuất để hiện thực
+
+| Tool name | Dùng cho nhánh | Mục đích |
+|---|---|---|
+| `search_faq_kb(query, filters, top_k)` | FAQ | Tìm câu trả lời từ `vinhomes_faq_selected.csv` |
+| `get_faq_detail(id)` | FAQ | Lấy đầy đủ nội dung + nguồn của một FAQ record |
+| `get_ticket_schema()` | Ticket | Trả về các field bắt buộc và optional |
+| `validate_ticket_input(ticket_draft)` | Ticket | Kiểm tra draft ticket hợp lệ chưa |
+| `summarize_ticket_draft(ticket_draft)` | Ticket | Tạo bản tóm tắt trước khi xác nhận |
+| `create_ticket(ticket_draft)` | Ticket | Tạo ticket thật trong hệ thống |
+| `get_weather(date, location)` | Trip | Lấy thời tiết theo ngày đi |
+| `get_vop_places(interests, audience)` | Trip | Lấy danh sách địa điểm trong Ocean Park |
+| `get_bus_routes(origin, destination, date_time)` | Trip | Kiểm tra route đi lại |
+| `estimate_budget(pax, itinerary_items)` | Trip | Ước lượng ngân sách |
+| `build_itinerary(constraints, weather, places, transport)` | Trip | Kết hợp dữ liệu thành lịch trình |
+
+### 8.6 Khuyến nghị hiện thực bằng code
+
+- Dùng `StateGraph` với một shared state duy nhất.
+- Router node dùng `gpt-4o` với structured output để tránh mơ hồ.
+- FAQ tool nên là tool nội bộ đọc trực tiếp file CSV đã lọc thay vì web search.
+- Ticket tool có thể mock ở giai đoạn đầu bằng cách ghi ra JSON/file log.
+- Planner tool có thể bắt đầu với mock data cho `get_vop_places` và `get_bus_routes`, sau đó mới nối API thật.
