@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat — Vinhomes Resident AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/chat.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body class="chat-workspace-body">
+  <div class="workspace-shell">
+    <!-- ── Sidebar ── -->
+    <aside class="workspace-sidebar">
+      <div class="sidebar-top">
+        <a href="/" class="workspace-logo">
+          <span class="workspace-logo-mark">V</span>
+          <span>Vinhomes AI</span>
+        </a>
+        <button id="new-session-btn" class="primary-button sidebar-new-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Cuộc trò chuyện mới
+        </button>
+        <a href="/sessions" class="ghost-button sidebar-link-btn">Quản lý phiên</a>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">Kết nối</div>
+        <div class="ping-card">
+          <span id="ping-indicator" class="ping-dot ping-dot-warn"></span>
+          <div>
+            <div class="ping-title">Backend</div>
+            <div id="ping-text" class="ping-text">Đang kiểm tra…</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-section sidebar-grow">
+        <div class="sidebar-label">Lịch sử phiên</div>
+        <div id="session-list" class="session-list"></div>
+      </div>
+    </aside>
+
+    <!-- ── Main workspace ── -->
+    <main class="workspace-main">
+      <header class="workspace-topbar">
+        <div>
+          <div class="workspace-title">Resident Agent</div>
+          <div id="session-meta" class="workspace-subtitle">Chưa chọn phiên</div>
+        </div>
+        <div class="workspace-actions">
+          <span id="flow-pill" class="flow-pill">Chưa có luồng</span>
+        </div>
+      </header>
+
+      <!-- Chat panel -->
+      <section class="workspace-chat-only panel">
+        <!-- Prompt suggestions -->
+        <div class="composer-prompt-row">
+          <button class="prompt-chip" data-prompt="Phí gửi xe máy ở Vinhomes Ocean Park là bao nhiêu?">💰 FAQ mẫu</button>
+          <button class="prompt-chip" data-prompt="Thang máy block A bị kẹt rồi">🔧 Ticket mẫu</button>
+          <button class="prompt-chip" data-prompt="Cuối tuần này lên kế hoạch đi chơi ở Ocean Park cho mình">🗺 Trip mẫu</button>
+        </div>
+
+        <!-- Messages -->
+        <div id="chat-messages" class="workspace-messages">
+          <div class="chat-empty-state">
+            <div class="chat-empty-icon">💬</div>
+            <div>Chưa có tin nhắn.<br>Chọn một gợi ý phía trên hoặc gõ câu hỏi để bắt đầu.</div>
+          </div>
+        </div>
+
+        <!-- Composer -->
+        <form id="chat-form" class="workspace-composer">
+          <textarea
+            id="chat-input"
+            placeholder="Hỏi về quy định, tạo ticket hoặc lên kế hoạch đi chơi…"
+            rows="3"
+          ></textarea>
+          <div class="chat-actions">
+            <span id="chat-status" class="subtle-text">Enter gửi · Shift+Enter xuống dòng</span>
+            <button type="submit" class="primary-button">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              Gửi
+            </button>
+          </div>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/chat.js"></script>
+</body>
+</html>
